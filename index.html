@@ -1236,13 +1236,71 @@
 
             const tarbooshMenu = [
                 {
-                    categoryName: "الأكل الشرقي والغربي",
+                    categoryName: "الأكل الشرقي",
                     items: [
                         { title: "فلافل حجري", desc: "صموان حجري مع طحينية ومقبلات", price: 1000 },
                         { title: "صاج فلافل", desc: "خبز صاج مع طحينية ومقبلات", price: 1250 },
                         { title: "ماعون فلافل", desc: "وجبة فلافل مشكلة", price: 1500 },
                         { title: "لفة كص حجري", desc: "كص لحم/دجاج مع صموان حجري", price: 1500 },
-                        { title: "صاج شاورما سوري", desc: "شاورما دجاج مميزة", price: 2500 }
+                        { title: "صاج شاورما سوري", desc: "شاورما دجاج مميزة", price: 2500 },
+                        { title: "كلاص فنكر", desc: "بطاطا مقلية مقرمشة", price: 1250 },
+                        { title: "فنكر دبل", desc: "وجبة فنكر مضاعفة", price: 2500 }
+                    ]
+                },
+                {
+                    categoryName: "الأكلات الغربية",
+                    items: [
+                        { title: "بركر لحم عراقي", desc: "بركر لحم بلدي مع الإضافات", price: 3500 },
+                        { title: "بركر دجاج", desc: "بركر دجاج مقرمش", price: 3000 },
+                        { title: "ريزو طربوش", desc: "رز مبهر مع قطع الدجاج والصلصة", price: 5500 },
+                        { title: "سكالوب دجاج", desc: "صدور دجاج مقلية بخلطة خاصة", price: 3000 },
+                        { title: "فاهيتا دجاج", desc: "دجاج متبل مع الخضار والبهارات", price: 2500 },
+                        { title: "سندويج زنكر", desc: "سندويش دجاج زنكر حار ومقرمش", price: 3000 }
+                    ]
+                },
+                {
+                    categoryName: "وجبات",
+                    items: [
+                        { title: "وجبة طربوش العائلية", desc: "وجبة عائلية متكاملة ومنوعة", price: 7500 },
+                        { title: "شاورما عربي", desc: "شاورما عربي مقطعة مع الصلصة", price: 4000 },
+                        { title: "شاورما عربي وسط", desc: "حجم وسط", price: 7500 },
+                        { title: "شاورما عربي كبير", desc: "حجم كبير عائلي", price: 11000 },
+                        { title: "نفر شاورما", desc: "طبق شاورما منفرد", price: 5000 }
+                    ]
+                },
+                {
+                    categoryName: "البيتزا",
+                    items: [
+                        { title: "بيتزا دجاج حجم كبير", desc: "بيتزا دجاج حجم كبير بالجبن", price: 11000 },
+                        { title: "بيتزا دجاج حجم وسط", desc: "بيتزا دجاج حجم وسط", price: 7000 },
+                        { title: "صاج ايطالي", desc: "صاج إيطالي محشي بالدجاج والجبن", price: 7000 }
+                    ]
+                },
+                {
+                    categoryName: "كنتاكي",
+                    items: [
+                        { title: "كنتاكي 3 قطع", desc: "قطع دجاج مقرمشة", price: 6000 },
+                        { title: "كنتاكي ٥ قطع", desc: "قطع دجاج مقرمشة", price: 9000 },
+                        { title: "كنتاكي ٨ قطع", desc: "وجبة دجاج مقرمش عائلية", price: 12500 }
+                    ]
+                },
+                {
+                    categoryName: "المقبلات",
+                    items: [
+                        { title: "ماعون مقبلات", desc: "شكليلة مقبلات شرقية", price: 2500 },
+                        { title: "حمص بطحينة", desc: "حمص ناعم مع الطحينة وزيت الزيتون", price: 2000 },
+                        { title: "مسبحة شامية", desc: "مسبحة حمص على الطريقة الشامية", price: 2500 },
+                        { title: "صلصة عسلية", desc: "صوص حلو ومميز", price: 750 },
+                        { title: "صلصة حارة", desc: "صوص حار ومتبل", price: 750 },
+                        { title: "ثومية", desc: "ثومية كريمية أصلية", price: 750 }
+                    ]
+                },
+                {
+                    categoryName: "المشروبات",
+                    items: [
+                        { title: "ببسي", desc: "علبة باردة", price: 500 },
+                        { title: "ببسي عائلي", desc: "حجم عائلي كبير", price: 1500 },
+                        { title: "لبن", desc: "غير متوفر حالياً", price: 0 }
                     ]
                 }
             ];
@@ -1256,13 +1314,20 @@
                 cat.items.forEach(prod => {
                     const itemEl = document.createElement('div');
                     itemEl.className = 'product-card';
+                    
+                    const isUnavailable = prod.title === "لبن";
+                    const priceDisplay = isUnavailable ? "غير متوفر" : `${prod.price.toLocaleString()} د.ع`;
+                    const actionBtn = isUnavailable 
+                        ? `<button class="add-btn" style="background:#eee; color:#888; border-color:#ccc; cursor:not-allowed;" disabled>غير متوفر</button>` 
+                        : `<button class="add-btn" onclick="addToCart('${prod.title}', ${prod.price}, '${prod.desc}')">إضافة +</button>`;
+
                     itemEl.innerHTML = `
                         <div class="product-info">
                             <h4>${prod.title}</h4>
                             <p>${prod.desc}</p>
-                            <div class="product-price">${prod.price.toLocaleString()} د.ع</div>
+                            <div class="product-price">${priceDisplay}</div>
                         </div>
-                        <button class="add-btn" onclick="addToCart('${prod.title}', ${prod.price}, '${prod.desc}')">إضافة +</button>
+                        ${actionBtn}
                     `;
                     container.appendChild(itemEl);
                 });
