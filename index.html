@@ -11,6 +11,11 @@
     <!-- مكتبة Leaflet CSS للخريطة التفاعلية -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
+    <!-- مكتبات Firebase الأساسية -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-analytics-compat.js"></script>
+
     <style>
         :root {
             --primary-orange: #ff6b00;
@@ -310,7 +315,6 @@
             100% { color: #ff00aa; text-shadow: 0 0 8px #ff00aa, 0 0 15px #ff00aa; }
         }
 
-        /* ستايل اسم السائق ببريق مميز */
         .driver-badge-name {
             color: #27ae60;
             font-weight: 800;
@@ -623,17 +627,33 @@
             color: #2ecc71;
         }
 
-        .cancel-order-btn {
-            background-color: #ff4d4d;
-            color: white;
+        /* أزرار تحكم السائق بالطلب (الخيارات الأربعة) */
+        .driver-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+            border-top: 1px dashed #eee;
+            padding-top: 10px;
+        }
+
+        .driver-action-btn {
+            flex: 1;
+            min-width: 45%;
+            padding: 8px 10px;
             border: none;
-            padding: 6px 12px;
             border-radius: 8px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             cursor: pointer;
-            margin-top: 10px;
+            color: white;
+            text-align: center;
         }
+
+        .btn-status-1 { background-color: #2980b9; } /* تم الموافقة */
+        .btn-status-2 { background-color: #f39c12; } /* جار تجهيز الطلب */
+        .btn-status-3 { background-color: #8e44ad; } /* الطلب في الطريق */
+        .btn-status-4 { background-color: #27ae60; } /* الطلب عند الباب */
 
         .settings-grid { display: flex; flex-direction: column; gap: 10px; }
         .setting-item {
@@ -712,16 +732,6 @@
             margin-top: 10px;
             z-index: 1;
         }
-
-        .location-info-box {
-            background: #f8f9fa;
-            border: 1px dashed var(--primary-orange);
-            padding: 10px;
-            border-radius: 10px;
-            margin-top: 10px;
-            font-size: 12px;
-            color: #444;
-        }
     </style>
 </head>
 <body>
@@ -736,12 +746,11 @@
                 <i class="fa-solid fa-utensils"></i>
             </div>
             <h1 class="welcome-title">تسجيل الدخول - شرقاط فود</h1>
-            <p class="welcome-subtitle">أدخل بياناتك للحصول على رمز التحقق عبر التلغرام أو أدخل رمز الأدمن</p>
+            <p class="welcome-subtitle">أدخل بياناتك للحصول على رمز التحقق عبر التلغرام أو أدخل رمز الأدمن / السائق</p>
 
             <div class="auth-form" id="phone-step-form">
                 <input type="text" id="user-name-input" class="app-input" placeholder="الاسم الكامل">
                 
-                <!-- الأزرار التبادلية (هل أنت أدمن؟ / هل أنت سائق توصيل؟) - لا يمكن تفعيلهما معاً -->
                 <div class="role-switch-container">
                     <button type="button" id="role-admin-btn" class="role-btn" onclick="selectRole('admin')">هل أنت أدمن ؟</button>
                     <button type="button" id="role-driver-btn" class="role-btn" onclick="selectRole('driver')">هل أنت سائق توصيل ؟</button>
@@ -750,23 +759,19 @@
                 <input type="tel" id="user-phone-input" class="app-input" placeholder="رقم الهاتف (مثال: 07701234567)">
                 <input type="password" id="admin-code-input" class="app-input" placeholder="أدخل رمز الأدمن أو كود السائق" style="display: none;">
 
-                <!-- زر التلغرام (يظهر للمستخدم العادي فقط) -->
                 <button class="telegram-btn" id="telegram-login-btn" onclick="redirectToBot(event)">
                     <i class="fa-brands fa-telegram" style="font-size: 20px;"></i> الحصول على الرمز عبر التلغرام
                 </button>
 
-                <!-- زر الدخول المباشر للأدمن (يظهر فقط عند اختيار وضع الأدمن) -->
                 <button class="btn-primary" id="admin-direct-btn" style="display: none; background-color: #8e44ad;" onclick="loginAsAdminDirectly()">
                     <i class="fa-solid fa-shield-halved"></i> دخول مباشر للأدمن
                 </button>
 
-                <!-- زر الدخول المباشر للسائق (يظهر فقط عند اختيار وضع السائق) -->
                 <button class="btn-primary" id="driver-direct-btn" style="display: none; background-color: #27ae60;" onclick="loginAsDriverDirectly()">
                     <i class="fa-solid fa-motorcycle"></i> دخول مباشر للسائق
                 </button>
             </div>
 
-            <!-- الخطوة 2: إدخال الرمز (للعميل العادي فقط) -->
             <div class="auth-form" id="otp-step-form" style="display: none;">
                 <p style="font-size: 13px; color: var(--text-muted); text-align: center; line-height: 1.6;">
                     اضغط على **Start** داخل البوت لاستلام الرمز، ثم أدخله هنا:
@@ -818,9 +823,7 @@
         <!-- المحتوى الرئيسي -->
         <div class="main-content">
             
-            <!-- صفحة الرئيسية -->
             <div id="home-page" class="page active">
-                
                 <div class="category-tabs">
                     <button class="tab-btn active" onclick="switchCategory('restaurants')">
                         <i class="fa-solid fa-burger"></i> المطاعم
@@ -830,11 +833,9 @@
                     </button>
                 </div>
 
-                <!-- قسم المطاعم -->
                 <div id="restaurants-sec">
                     <h3 class="section-title">أفضل المطاعم في الشرقاط</h3>
                     <div class="cards-grid">
-                        
                         <div class="store-card closed" onclick="openStore('هلا فود', 'restaurants', true)">
                             <span class="closed-badge">مغلق حالياً</span>
                             <div class="store-img"><i class="fa-solid fa-drumstick-bite"></i></div>
@@ -852,7 +853,7 @@
                             <div class="store-img"><i class="fa-solid fa-stroopwafel"></i></div>
                             <div class="store-info">
                                 <div class="store-name">فلافل طربوش</div>
-                                <div class="store-desc">أطيب ساندويتشات الفلافل الشرقية، الأكلات الغربية والبيتزا</div>
+                                <div class="store-desc">أطيب ساندويتشات الفلافل الشرقية، والأكلات الغربية</div>
                                 <div class="store-meta">
                                     <span><i class="fa-solid fa-star" style="color: #ffc107;"></i> 4.9</span>
                                     <span><i class="fa-regular fa-clock"></i> 15-25 دقيقة</span>
@@ -871,15 +872,12 @@
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </div>
 
-                <!-- قسم الماركتات (جميعها قريباً) -->
                 <div id="markets-sec" style="display: none;">
                     <h3 class="section-title">الماركتات والسوبرماركت</h3>
                     <div class="cards-grid">
-                        
                         <div class="store-card closed" onclick="openStore('ماركت علي', 'markets', true)">
                             <span class="closed-badge">قريباً</span>
                             <div class="store-img" style="color: #888;"><i class="fa-solid fa-basket-shopping"></i></div>
@@ -892,64 +890,19 @@
                                 </div>
                             </div>
                         </div>
-
-                        <div class="store-card closed" onclick="openStore('ماركت مخلد', 'markets', true)">
-                            <span class="closed-badge">قريباً</span>
-                            <div class="store-img" style="color: #888;"><i class="fa-solid fa-cart-shopping"></i></div>
-                            <div class="store-info">
-                                <div class="store-name">ماركت مخلد</div>
-                                <div class="store-desc">حلويات، أجبان، وعصائر طازجة</div>
-                                <div class="store-meta">
-                                    <span><i class="fa-solid fa-star" style="color: #ffc107;"></i> 4.8</span>
-                                    <span><i class="fa-regular fa-clock"></i> قريباً جداً</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="store-card closed" onclick="openStore('اسواق الحارث', 'markets', true)">
-                            <span class="closed-badge">قريباً</span>
-                            <div class="store-img" style="color: #888;"><i class="fa-solid fa-shop"></i></div>
-                            <div class="store-info">
-                                <div class="store-name">اسواق الحارث</div>
-                                <div class="store-desc">منتجات مجمّدة ومستلزمات متكاملة</div>
-                                <div class="store-meta">
-                                    <span><i class="fa-solid fa-star" style="color: #ffc107;"></i> 4.5</span>
-                                    <span><i class="fa-regular fa-clock"></i> قريباً جداً</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="store-card closed" onclick="openStore('اسواق الهيثم', 'markets', true)">
-                            <span class="closed-badge">قريباً</span>
-                            <div class="store-img" style="color: #888;"><i class="fa-solid fa-bag-shopping"></i></div>
-                            <div class="store-info">
-                                <div class="store-name">اسواق الهيثم</div>
-                                <div class="store-desc">خضروات، فواكه، وسلع خفيفة</div>
-                                <div class="store-meta">
-                                    <span><i class="fa-solid fa-star" style="color: #ffc107;"></i> 4.7</span>
-                                    <span><i class="fa-regular fa-clock"></i> قريباً جداً</span>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
-
             </div>
 
-            <!-- صفحة قائمة محل معين -->
             <div id="store-page" class="page">
                 <div class="menu-header">
                     <button class="back-btn" onclick="showPage('home-page')"><i class="fa-solid fa-arrow-right"></i></button>
                     <h2 id="store-title-display">اسم المتجر</h2>
                 </div>
-
                 <div id="store-products-list"></div>
             </div>
 
-            <!-- صفحة الحساب والاعدادات -->
             <div id="profile-page" class="page">
-                
                 <div class="user-profile-header">
                     <div class="avatar"><i class="fa-solid fa-user"></i></div>
                     <div>
@@ -958,62 +911,10 @@
                     </div>
                 </div>
 
-                <!-- الطلبات -->
                 <div class="orders-section">
                     <h3 class="section-title" id="orders-section-title">طلباتي</h3>
-                    <div id="orders-list">
-                        <div class="order-card" id="demo-order-1">
-                            <div class="order-header">
-                                <span>طلب من: فلافل طربوش</span>
-                                <span class="order-status" id="status-demo-1">بانتظار تأكيد المطعم...</span>
-                            </div>
-                            <p style="font-size: 13px; color: var(--text-muted);">2x فلافل حجري</p>
-                            <p style="font-size: 12px; font-weight: 700; margin-top: 5px;">الإجمالي: 2,000 د.ع</p>
-                            <button class="cancel-order-btn" id="cancel-btn-demo-1" onclick="cancelOrder('demo-order-1')">إلغاء الطلب</button>
-                        </div>
-                    </div>
+                    <div id="orders-list"></div>
                 </div>
-
-                <!-- الإعدادات -->
-                <div class="settings-section">
-                    <h3 class="section-title">الإعدادات</h3>
-                    <div class="settings-grid">
-                        
-                        <div class="setting-item" onclick="openMapModal()">
-                            <div class="setting-item-left">
-                                <div class="setting-icon"><i class="fa-solid fa-map-location-dot"></i></div>
-                                <span>عناوين التوصيل وخريطة الشرقاط</span>
-                            </div>
-                            <i class="fa-solid fa-angle-left" style="color: #ccc;"></i>
-                        </div>
-
-                        <div class="setting-item" onclick="alert('طريقة الدفع: الدفع نقداً عند الاستلام')">
-                            <div class="setting-item-left">
-                                <div class="setting-icon"><i class="fa-solid fa-wallet"></i></div>
-                                <span>طرق الدفع</span>
-                            </div>
-                            <i class="fa-solid fa-angle-left" style="color: #ccc;"></i>
-                        </div>
-
-                        <div class="setting-item" onclick="alert('الإشعارات مفعلة')">
-                            <div class="setting-item-left">
-                                <div class="setting-icon"><i class="fa-solid fa-bell"></i></div>
-                                <span>تنبيهات التطبيق</span>
-                            </div>
-                            <i class="fa-solid fa-angle-left" style="color: #ccc;"></i>
-                        </div>
-
-                        <div class="setting-item" onclick="alert('الدعم الفني: 0784178188')">
-                            <div class="setting-item-left">
-                                <div class="setting-icon"><i class="fa-solid fa-headset"></i></div>
-                                <span>المساعدة والدعم الفني (0784178188)</span>
-                            </div>
-                            <i class="fa-solid fa-angle-left" style="color: #ccc;"></i>
-                        </div>
-
-                    </div>
-                </div>
-
             </div>
 
         </div>
@@ -1053,19 +954,15 @@
                         <option value="الشرقاط - السوق الرئيسي">الشرقاط - السوق الرئيسي</option>
                         <option value="الشرقاط - حي القريات">الشرقاط - حي القريات</option>
                         <option value="الشرقاط - حي الضباط">الشرقاط - حي الضباط</option>
-                        <option value="الشرقاط - منطقة سديرة">الشرقاط - منطقة سديرة</option>
-                        <option value="الشرقاط - منطقة الحورية">الشرقاط - منطقة الحورية</option>
-                        <option value="الشرقاط - البوعيثة">الشرقاط - البوعيثة</option>
-                        <option value="الشرقاط - الشرقاط القديمة">الشرقاط - الشرقاط القديمة</option>
                     </select>
 
-                    <label style="margin-top: 5px;">تفاصيل إضافية للعنوان (أقرب نقطة دالة):</label>
+                    <label style="margin-top: 5px;">تفاصيل إضافية للعنوان:</label>
                     <input type="text" id="cust-location" placeholder="مثال: قرب جامع الشرقاط الكبير">
 
                     <label style="margin-top: 5px;">رقم الهاتف للتواصل:</label>
                     <input type="tel" id="cust-phone" value="07701234567">
 
-                    <button class="btn-primary" style="margin-top: 15px;" onclick="confirmOrder()">تأكيد الطلب النهائي</button>
+                    <button class="btn-primary" style="margin-top: 15px;" onclick="confirmOrder()">تأكيد الطلب النهائي وإرساله للسائق</button>
                 </div>
             </div>
         </div>
@@ -1080,18 +977,11 @@
                     <button onclick="closeMapModal()" style="border:none; background:none; font-size: 20px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 
-                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">قم بـ **سحب الدبوس** للموقع المطلوب مباشرة على الخريطة:</p>
-                
                 <button class="btn-gps" onclick="getUserLocation()">
                     <i class="fa-solid fa-crosshairs"></i> تحديد موقعي الحالي في الشرقاط (GPS)
                 </button>
 
                 <div id="map-container"></div>
-
-                <div id="location-details" class="location-info-box">
-                    <strong>الموقع المحدد حالياً:</strong> <br><span id="loc-status-text">قضاء الشرقاط (35.5000, 43.2000)</span>
-                </div>
-
                 <button class="btn-primary" style="margin-top: 15px;" onclick="confirmSelectedLocation()">تأكيد هذا الموقع</button>
             </div>
         </div>
@@ -1114,43 +1004,45 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
+        // إعدادات Firebase الخاصة بالمشروع (e5vw5bw)
+        const firebaseConfig = {
+          apiKey: "AIzaSyC8jHtaNWNzu0MVE1fqUzv1Z53i71Evz0A",
+          authDomain: "e5vw5bw.firebaseapp.com",
+          projectId: "e5vw5bw",
+          storageBucket: "e5vw5bw.firebasestorage.app",
+          messagingSenderId: "733104661711",
+          appId: "1:733104661711:web:942a82131f931fe6c003ba",
+          measurementId: "G-6DRJCZD0HB"
+        };
+        
+        // تهيئة فايربيس
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const analytics = firebase.analytics();
+
         const BOT_URL = "https://t.me/Shirqatfood_bot"; 
         let generatedOTP = null;
-
         let cart = [];
         let currentStoreName = "";
-        let orderCounter = 2;
-        
         let selectedLat = 35.5000;
         let selectedLng = 43.2000;
-
         let leafletMap = null;
         let leafletMarker = null;
-
-        // متغير لتخزين نوع الحساب الحالي (عادي، أدمن، أو سائق)
-        let userRole = 'normal'; // قيم ممكنة: 'normal', 'admin', 'driver'
+        let userRole = 'normal'; 
+        let currentUserName = "مستخدم";
 
         function initMap() {
             if (leafletMap) return;
-
             leafletMap = L.map('map-container').setView([selectedLat, selectedLng], 13);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            }).addTo(leafletMap);
-
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(leafletMap);
             leafletMarker = L.marker([selectedLat, selectedLng], { draggable: true }).addTo(leafletMap);
-
             leafletMarker.on('dragend', function (event) {
                 let position = leafletMarker.getLatLng();
                 selectedLat = position.lat;
                 selectedLng = position.lng;
-                
-                document.getElementById('loc-status-text').innerText = `تم تحديد الموقع: (${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)})`;
             });
         }
 
-        // دالة اختيار الدور (أدمن أو سائق)
         function selectRole(role) {
             const adminBtn = document.getElementById('role-admin-btn');
             const driverBtn = document.getElementById('role-driver-btn');
@@ -1160,13 +1052,11 @@
             const adminDirectBtn = document.getElementById('admin-direct-btn');
             const driverDirectBtn = document.getElementById('driver-direct-btn');
 
-            // إذا كان الزر مضغوطاً مسبقاً، قم بإلغائه والرجوع للحالة العادية
             if (userRole === role) {
                 userRole = 'normal';
                 adminBtn.classList.remove('active');
                 driverBtn.classList.remove('active');
                 adminCodeInput.style.display = 'none';
-                adminCodeInput.value = '';
                 phoneInput.style.display = 'block';
                 telegramBtn.style.display = 'flex';
                 adminDirectBtn.style.display = 'none';
@@ -1174,7 +1064,6 @@
                 return;
             }
 
-            // تفعيل الدور المحدد وإلغاء الآخر تماماً
             userRole = role;
             if (role === 'admin') {
                 adminBtn.classList.add('active');
@@ -1182,92 +1071,54 @@
                 adminCodeInput.placeholder = 'أدخل رمز الأدمن';
                 adminCodeInput.style.display = 'block';
                 phoneInput.style.display = 'none';
-                phoneInput.value = '';
-                // إخفاء زر التلغرام وإظهار زر الدخول المباشر للأدمن فوراً
                 telegramBtn.style.display = 'none';
                 adminDirectBtn.style.display = 'flex';
                 driverDirectBtn.style.display = 'none';
             } else if (role === 'driver') {
                 driverBtn.classList.add('active');
                 adminBtn.classList.remove('active');
-                adminCodeInput.placeholder = 'أدخل كود السائق الوحيد';
+                adminCodeInput.placeholder = 'أدخل كود السائق';
                 adminCodeInput.style.display = 'block';
                 phoneInput.style.display = 'none';
-                phoneInput.value = '';
-                // إخفاء زر التلغرام وإظهار زر الدخول المباشر للسائق فوراً
                 telegramBtn.style.display = 'none';
                 adminDirectBtn.style.display = 'none';
                 driverDirectBtn.style.display = 'flex';
             }
         }
 
-        // دالة تسجيل الدخول المباشر للأدمن بدون تليغرام
         function loginAsAdminDirectly() {
             const name = document.getElementById('user-name-input').value.trim();
             const adminCode = document.getElementById('admin-code-input').value.trim();
+            if (!name || !adminCode) { alert("يرجى إكمال البيانات"); return; }
 
-            if (!name) {
-                alert("يرجى إدخال الاسم الكامل أولاً");
-                return;
-            }
-
-            if (!adminCode) {
-                alert("يرجى إدخال رمز الأدمن");
-                return;
-            }
-
-            const usernameDisplay = document.getElementById('disp-username');
-            const phoneDisplay = document.getElementById('disp-phone');
-            const moneyBar = document.getElementById('infinite-money-bar');
-
-            if (adminCode === "MURTADAISADMIN2013") {
+            if (adminCode === "MURTADAISADMIN2013" || adminCode === "MOATAZISADMIN2014") {
                 userRole = 'admin';
-                usernameDisplay.innerHTML = `<span class="neon-admin-murtada">الأدمن مرتضى</span>`;
-                moneyBar.style.display = "block";
-                phoneDisplay.innerText = "أدمن النظام";
-            } else if (adminCode === "MOATAZISADMIN2014") {
-                userRole = 'admin';
-                usernameDisplay.innerHTML = `<span class="neon-admin-moataz">الأدمن معتز</span>`;
-                moneyBar.style.display = "block";
-                phoneDisplay.innerText = "أدمن النظام";
+                currentUserName = name;
+                document.getElementById('disp-username').innerHTML = `<span class="neon-admin-murtada">الأدمن ${name}</span>`;
+                document.getElementById('infinite-money-bar').style.display = "block";
+                document.getElementById('welcome-1').classList.add('hidden');
+                document.getElementById('welcome-2').classList.remove('hidden');
             } else {
                 alert("رمز الأدمن غير صحيح!");
-                return;
             }
-
-            document.getElementById('welcome-1').classList.add('hidden');
-            document.getElementById('welcome-2').classList.remove('hidden');
         }
 
-        // دالة تسجيل الدخول المباشر للسائق بدون تليغرام
         function loginAsDriverDirectly() {
             const name = document.getElementById('user-name-input').value.trim();
             const adminCode = document.getElementById('admin-code-input').value.trim();
-
-            if (!name) {
-                alert("يرجى إدخال الاسم الكامل أولاً");
-                return;
-            }
-
-            if (!adminCode) {
-                alert("يرجى إدخال كود السائق");
-                return;
-            }
+            if (!name || !adminCode) { alert("يرجى إكمال البيانات"); return; }
 
             if (adminCode === "Driver212") {
                 userRole = 'driver';
-                const usernameDisplay = document.getElementById('disp-username');
-                const phoneDisplay = document.getElementById('disp-phone');
-                const moneyBar = document.getElementById('infinite-money-bar');
-                const ordersSectionTitle = document.getElementById('orders-section-title');
-
-                usernameDisplay.innerHTML = `<span class="driver-badge-name">سائق التوصيل: ${name}</span>`;
-                moneyBar.style.display = "none";
-                phoneDisplay.innerText = "كود السائق: Driver212";
-                ordersSectionTitle.innerText = "طلبات الزبائن (سائق توصيل)";
-
+                currentUserName = name;
+                document.getElementById('disp-username').innerHTML = `<span class="driver-badge-name">سائق التوصيل: ${name}</span>`;
+                document.getElementById('disp-phone').innerText = "كود السائق: Driver212";
+                document.getElementById('orders-section-title').innerText = "طلبات الزبائن الواردة (سائق توصيل)";
+                
                 document.getElementById('welcome-1').classList.add('hidden');
                 document.getElementById('welcome-2').classList.remove('hidden');
+                
+                listenOrdersForDriver();
             } else {
                 alert("كود السائق غير صحيح!");
             }
@@ -1276,38 +1127,25 @@
         function redirectToBot(event) {
             const name = document.getElementById('user-name-input').value.trim();
             const phone = document.getElementById('user-phone-input').value.trim();
-
-            if (!name) {
-                alert("يرجى إدخال الاسم الكامل أولاً");
-                return;
-            }
-
-            if (!phone) {
-                alert("يرجى إدخال رقم الهاتف");
-                return;
-            }
-
+            if (!name || !phone) { alert("يرجى ملء الاسم ورقم الهاتف"); return; }
+            currentUserName = name;
             generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
             window.open(`${BOT_URL}?start=${generatedOTP}`, '_blank');
-
             document.getElementById('phone-step-form').style.display = 'none';
             document.getElementById('otp-step-form').style.display = 'flex';
         }
 
         function verifyOTPCode() {
-            const inputs = document.querySelectorAll('.otp-input-group input');
             let enteredCode = "";
-            inputs.forEach(inp => enteredCode += inp.value.trim());
-
-            if (enteredCode.length < 6) {
-                alert("يرجى إدخال الرمز المكون من 6 أرقام كاملاً");
-                return;
-            }
-
+            document.querySelectorAll('.otp-input-group input').forEach(inp => enteredCode += inp.value.trim());
             if (enteredCode === generatedOTP) {
-                processAuthAfterOTP();
+                userRole = 'normal';
+                document.getElementById('disp-username').innerText = currentUserName;
+                document.getElementById('welcome-1').classList.add('hidden');
+                document.getElementById('welcome-2').classList.remove('hidden');
+                listenOrdersForCustomer();
             } else {
-                alert("رمز التحقق غير صحيح، يرجى المحاولة مرة أخرى.");
+                alert("رمز التحقق غير صحيح.");
             }
         }
 
@@ -1318,28 +1156,7 @@
 
         function moveNextOTP(elem, index) {
             const inputs = document.querySelectorAll('.otp-input-group input');
-            if (elem.value.length === 1 && index < 5) {
-                inputs[index + 1].focus();
-            }
-        }
-
-        function processAuthAfterOTP() {
-            const name = document.getElementById('user-name-input').value.trim();
-            const phone = document.getElementById('user-phone-input').value.trim();
-
-            const usernameDisplay = document.getElementById('disp-username');
-            const phoneDisplay = document.getElementById('disp-phone');
-            const moneyBar = document.getElementById('infinite-money-bar');
-
-            userRole = 'normal';
-            usernameDisplay.innerText = name;
-            phoneDisplay.innerText = phone;
-            moneyBar.style.display = "none";
-
-            document.getElementById('cust-phone').value = phone || "07701234567";
-
-            document.getElementById('welcome-1').classList.add('hidden');
-            document.getElementById('welcome-2').classList.remove('hidden');
+            if (elem.value.length === 1 && index < 5) inputs[index + 1].focus();
         }
 
         function closeWelcome() {
@@ -1349,7 +1166,6 @@
         function switchCategory(type) {
             const tabs = document.querySelectorAll('.category-tabs .tab-btn');
             tabs.forEach(tab => tab.classList.remove('active'));
-
             if(type === 'restaurants') {
                 tabs[0].classList.add('active');
                 document.getElementById('restaurants-sec').style.display = 'block';
@@ -1364,7 +1180,6 @@
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
-
             if(tab === 'home') {
                 document.getElementById('nav-home').classList.add('active');
                 document.getElementById('home-page').classList.add('active');
@@ -1381,117 +1196,82 @@
 
         function openMapModal() {
             document.getElementById('map-modal').classList.add('active');
-            setTimeout(() => {
-                initMap();
-                if (leafletMap) {
-                    leafletMap.invalidateSize();
-                }
-            }, 200);
+            setTimeout(() => { initMap(); if (leafletMap) leafletMap.invalidateSize(); }, 200);
         }
 
-        function closeMapModal() {
-            document.getElementById('map-modal').classList.remove('active');
-        }
+        function closeMapModal() { document.getElementById('map-modal').classList.remove('active'); }
 
         function getUserLocation() {
-            const statusText = document.getElementById('loc-status-text');
-            statusText.innerText = "جاري تحديد موقعك الدقيق...";
-
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        selectedLat = position.coords.latitude;
-                        selectedLng = position.coords.longitude;
-
-                        if (leafletMap && leafletMarker) {
-                            leafletMarker.setLatLng([selectedLat, selectedLng]);
-                            leafletMap.setView([selectedLat, selectedLng], 16);
-                        }
-
-                        statusText.innerText = `تم تحديد الإحداثيات: (${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)}) داخل الشرقاط`;
-                        showToast("تم جلب موقعك الحالي بنجاح!");
-                    },
-                    (error) => {
-                        statusText.innerText = "تعذر الجلب تلقائياً، يرجى تشغيل الـ GPS أو تحريك الدبوس يدوياً.";
-                        alert("يرجى تفعيل خيار تحديد الموقع (GPS) في هاتفك للوصول لموقعك الدقيق.");
-                    },
-                    { enableHighAccuracy: true, timeout: 10000 }
-                );
-            } else {
-                alert("متصفحك لا يدعم خاصية تحديد الموقع الجغرافي.");
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    selectedLat = pos.coords.latitude;
+                    selectedLng = pos.coords.longitude;
+                    if (leafletMap && leafletMarker) {
+                        leafletMarker.setLatLng([selectedLat, selectedLng]);
+                        leafletMap.setView([selectedLat, selectedLng], 16);
+                    }
+                    showToast("تم جلب موقعك الحالي بنجاح!");
+                });
             }
         }
 
         function confirmSelectedLocation() {
             document.getElementById('current-location-text').innerText = "موقع مخصص";
-            document.getElementById('cust-location').value = `موقع مخصص (${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)})`;
+            document.getElementById('cust-location').value = `إحداثيات (${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)})`;
             closeMapModal();
-            showToast("تم اعتماد موقع التوصيل في الشرقاط");
         }
 
         function openStore(name, category, isClosed = false) {
-            // شرط منع السائق من الطلب وعرض رسالة تنبيهية بأن حسابه مسجل كسائق
             if (userRole === 'driver') {
-                showToast("حسابك مسجل كسائق، لا يمكنك الطلب! يظهر لك أدناه طلبات الزبائن.");
+                showToast("حسابك مسجل كسائق! تابع طلبات الزبائن أدناه.");
                 switchTab('profile');
                 return;
             }
-
-            if (isClosed) {
-                showToast("عذراً، " + name + " مغلق حالياً أو سيتوفر قريباً!");
-                return;
-            }
+            if (isClosed) { showToast("عذراً، المتجر مغلق حالياً!"); return; }
 
             currentStoreName = name;
             document.getElementById('store-title-display').innerText = name;
-            
             const container = document.getElementById('store-products-list');
             container.innerHTML = "";
 
-            if(name === 'فلافل طربوش') {
-                const tarbooshMenu = [
-                    {
-                        categoryName: "الأكل الشرقي",
-                        items: [
-                            { title: "فلافل حجري", desc: "صموان حجري مع طحينية ومقبلات", price: 1000 },
-                            { title: "صاج فلافل", desc: "خبز صاج مع طحينية ومقبلات", price: 1250 },
-                            { title: "ماعون فلافل", desc: "وجبة فلافل مشكلة", price: 1500 },
-                            { title: "لفة كص حجري", desc: "كص لحم/دجاج مع صموان حجري", price: 1500 },
-                            { title: "صاج شاورما سوري", desc: "شاورما دجاج مميزة بالطريقة السورية", price: 2500 }
-                        ]
-                    }
-                ];
+            const tarbooshMenu = [
+                {
+                    categoryName: "الأكل الشرقي والغربي",
+                    items: [
+                        { title: "فلافل حجري", desc: "صموان حجري مع طحينية ومقبلات", price: 1000 },
+                        { title: "صاج فلافل", desc: "خبز صاج مع طحينية ومقبلات", price: 1250 },
+                        { title: "ماعون فلافل", desc: "وجبة فلافل مشكلة", price: 1500 },
+                        { title: "لفة كص حجري", desc: "كص لحم/دجاج مع صموان حجري", price: 1500 },
+                        { title: "صاج شاورما سوري", desc: "شاورما دجاج مميزة", price: 2500 }
+                    ]
+                }
+            ];
 
-                tarbooshMenu.forEach(cat => {
-                    const catHeader = document.createElement('div');
-                    catHeader.className = 'menu-category-header';
-                    catHeader.innerHTML = `<i class="fa-solid fa-utensils"></i> ${cat.categoryName}`;
-                    container.appendChild(catHeader);
+            tarbooshMenu.forEach(cat => {
+                const catHeader = document.createElement('div');
+                catHeader.className = 'menu-category-header';
+                catHeader.innerHTML = `<i class="fa-solid fa-utensils"></i> ${cat.categoryName}`;
+                container.appendChild(catHeader);
 
-                    cat.items.forEach(prod => {
-                        const itemEl = document.createElement('div');
-                        itemEl.className = 'product-card';
-                        itemEl.innerHTML = `
-                            <div class="product-info">
-                                <h4>${prod.title}</h4>
-                                <p>${prod.desc}</p>
-                                <div class="product-price">${prod.price.toLocaleString()} د.ع</div>
-                            </div>
-                            <button class="add-btn" onclick="addToCart('${prod.title}', ${prod.price}, '${prod.desc}')">إضافة +</button>
-                        `;
-                        container.appendChild(itemEl);
-                    });
+                cat.items.forEach(prod => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'product-card';
+                    itemEl.innerHTML = `
+                        <div class="product-info">
+                            <h4>${prod.title}</h4>
+                            <p>${prod.desc}</p>
+                            <div class="product-price">${prod.price.toLocaleString()} د.ع</div>
+                        </div>
+                        <button class="add-btn" onclick="addToCart('${prod.title}', ${prod.price}, '${prod.desc}')">إضافة +</button>
+                    `;
+                    container.appendChild(itemEl);
                 });
-            }
+            });
 
             showPage('store-page');
         }
 
         function addToCart(title, price, desc) {
-            if (userRole === 'driver') {
-                showToast("حسابك مسجل كسائق، لا يمكنك الطلب!");
-                return;
-            }
             cart.push({ title, price, desc, store: currentStoreName });
             updateCartUI();
             showToast("تمت إضافة " + title + " إلى السلة");
@@ -1500,7 +1280,6 @@
         function updateCartUI() {
             const floatBtn = document.getElementById('cart-float');
             const countEl = document.getElementById('cart-count');
-            
             if(cart.length > 0 && userRole !== 'driver') {
                 floatBtn.style.display = 'flex';
                 countEl.innerText = cart.length;
@@ -1510,11 +1289,8 @@
         }
 
         function openCartModal() {
-            if (userRole === 'driver') return;
             const modal = document.getElementById('cart-modal');
             const container = document.getElementById('cart-items-container');
-            const totalPriceEl = document.getElementById('cart-total-price');
-            
             container.innerHTML = "";
             let total = 0;
 
@@ -1525,24 +1301,20 @@
                 el.innerHTML = `
                     <div>
                         <div style="font-weight:700; font-size:14px;">${item.title}</div>
-                        <div style="font-size:11px; color:#666;">الوصف: ${item.desc}</div>
-                        <div style="font-size:11px; color:var(--primary-orange); font-weight:700;">المتجر: ${item.store}</div>
+                        <div style="font-size:11px; color:#666;">${item.desc}</div>
                     </div>
                     <div style="font-weight:800; font-size:13px;">${item.price.toLocaleString()} د.ع</div>
                 `;
                 container.appendChild(el);
             });
 
-            totalPriceEl.innerText = total.toLocaleString() + " د.ع";
+            document.getElementById('cart-total-price').innerText = total.toLocaleString() + " د.ع";
             document.getElementById('order-info-form').style.display = 'none';
             document.getElementById('btn-to-info').style.display = 'block';
             modal.classList.add('active');
         }
 
-        function closeCartModal() {
-            document.getElementById('cart-modal').classList.remove('active');
-        }
-
+        function closeCartModal() { document.getElementById('cart-modal').classList.remove('active'); }
         function showOrderInfoForm() {
             document.getElementById('btn-to-info').style.display = 'none';
             document.getElementById('order-info-form').style.display = 'block';
@@ -1553,69 +1325,107 @@
             const extraLoc = document.getElementById('cust-location').value;
             const phone = document.getElementById('cust-phone').value;
 
-            if(!phone) {
-                alert('يرجى كتابة رقم الهاتف للتواصل');
-                return;
-            }
+            if(!phone) { alert('يرجى كتابة رقم الهاتف'); return; }
 
-            const fullAddress = `${district} - ${extraLoc ? extraLoc : 'بدون تفاصيل إضافية'}`;
-            const ordersList = document.getElementById('orders-list');
             const total = cart.reduce((sum, item) => sum + item.price, 0);
-            const itemsSummary = cart.map(i => i.title).join('، ');
-            const currentOrderId = 'order-' + orderCounter++;
+            const itemsSummary = cart.map(i => `${i.title} (${i.store})`).join('، ');
 
-            const newOrderCard = document.createElement('div');
-            newOrderCard.className = 'order-card';
-            newOrderCard.id = currentOrderId;
-            newOrderCard.innerHTML = `
-                <div class="order-header">
-                    <span>طلب من: ${cart[0] ? cart[0].store : 'شرقاط فود'}</span>
-                    <span class="order-status" id="status-${currentOrderId}">بانتظار تأكيد المطعم...</span>
-                </div>
-                <p style="font-size: 13px; color: var(--text-muted);">${itemsSummary}</p>
-                <p style="font-size: 11px; color: #888; margin-top:2px;">الموقع: ${fullAddress}</p>
-                <p style="font-size: 12px; font-weight: 700; margin-top: 5px;">الإجمالي: ${total.toLocaleString()} د.ع</p>
-                <button class="cancel-order-btn" id="cancel-btn-${currentOrderId}" onclick="cancelOrder('${currentOrderId}')">إلغاء الطلب</button>
-            `;
+            const orderData = {
+                customerName: currentUserName,
+                phone: phone,
+                address: `${district} - ${extraLoc || 'بدون تفاصيل'}`,
+                items: itemsSummary,
+                total: total,
+                status: "بانتظار موافقة السائق",
+                timestamp: Date.now()
+            };
 
-            ordersList.prepend(newOrderCard);
-
-            setTimeout(() => {
-                const statusEl = document.getElementById(`status-${currentOrderId}`);
-                const cancelBtn = document.getElementById(`cancel-btn-${currentOrderId}`);
-                const cardEl = document.getElementById(currentOrderId);
-
-                if (statusEl && cancelBtn) {
-                    statusEl.innerText = "تم تأكيد الطلب من المطعم - جاري التحضير";
-                    statusEl.classList.add('confirmed-status');
-                    if (cardEl) cardEl.classList.add('confirmed');
-                    cancelBtn.style.display = 'none';
-                }
-            }, 10000);
-
-            cart = [];
-            updateCartUI();
-            closeCartModal();
-
-            showToast("تم إرسال طلبك! يمكنك الإلغاء فقط قبل تأكيد المطعم.");
-            switchTab('profile');
+            db.ref('orders').push(orderData).then(() => {
+                showToast("تم إرسال طلبك بنجاح إلى السائق!");
+                cart = [];
+                updateCartUI();
+                closeCartModal();
+                switchTab('profile');
+            }).catch((err) => {
+                alert("حدث خطأ في الإرسال: " + err.message);
+            });
         }
 
-        function cancelOrder(orderId) {
-            const orderElement = document.getElementById(orderId);
-            if(orderElement) {
-                orderElement.remove();
-                showToast("تم إلغاء الطلب بنجاح.");
-            }
+        function updateOrderStatus(orderId, newStatus) {
+            db.ref('orders/' + orderId).update({
+                status: newStatus
+            }).then(() => {
+                showToast("تم تحديث حالة الطلب بنجاح!");
+            });
+        }
+
+        function listenOrdersForDriver() {
+            db.ref('orders').on('value', (snapshot) => {
+                const ordersList = document.getElementById('orders-list');
+                ordersList.innerHTML = "";
+                const data = snapshot.val();
+
+                if (!data) {
+                    ordersList.innerHTML = `<p style="text-align:center; color:#888; padding:20px;">لا توجد طلبات حالياً</p>`;
+                    return;
+                }
+
+                Object.keys(data).forEach(orderId => {
+                    const order = data[orderId];
+                    const card = document.createElement('div');
+                    card.className = 'order-card';
+                    card.innerHTML = `
+                        <div class="order-header">
+                            <span>الزبون: ${order.customerName} (${order.phone})</span>
+                            <span class="order-status">${order.status}</span>
+                        </div>
+                        <p style="font-size: 13px; color: var(--text-muted);">العناصر: ${order.items}</p>
+                        <p style="font-size: 12px; color: #555; margin-top:3px;">العنوان: ${order.address}</p>
+                        <p style="font-size: 12px; font-weight: 700; margin-top: 5px;">الإجمالي: ${order.total.toLocaleString()} د.ع</p>
+                        
+                        <div class="driver-actions">
+                            <button class="driver-action-btn btn-status-1" onclick="updateOrderStatus('${orderId}', 'تم الموافقة على الطلب')">1. الموافقة</button>
+                            <button class="driver-action-btn btn-status-2" onclick="updateOrderStatus('${orderId}', 'جار تجهيز الطلب')">2. جاري التجهيز</button>
+                            <button class="driver-action-btn btn-status-3" onclick="updateOrderStatus('${orderId}', 'الطلب في الطريق')">3. في الطريق</button>
+                            <button class="driver-action-btn btn-status-4" onclick="updateOrderStatus('${orderId}', 'الطلب عند الباب')">4. عند الباب</button>
+                        </div>
+                    `;
+                    ordersList.prepend(card);
+                });
+            });
+        }
+
+        function listenOrdersForCustomer() {
+            db.ref('orders').on('value', (snapshot) => {
+                const ordersList = document.getElementById('orders-list');
+                ordersList.innerHTML = "";
+                const data = snapshot.val();
+                if (!data) return;
+
+                Object.keys(data).forEach(orderId => {
+                    const order = data[orderId];
+                    if (order.customerName === currentUserName) {
+                        const card = document.createElement('div');
+                        card.className = 'order-card confirmed';
+                        card.innerHTML = `
+                            <div class="order-header">
+                                <span>طلب توصيل</span>
+                                <span class="order-status confirmed-status">${order.status}</span>
+                            </div>
+                            <p style="font-size: 13px; color: var(--text-muted);">${order.items}</p>
+                            <p style="font-size: 12px; font-weight: 700; margin-top: 5px;">الإجمالي: ${order.total.toLocaleString()} د.ع</p>
+                        `;
+                        ordersList.prepend(card);
+                    }
+                });
+            });
         }
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.innerText = msg;
             toast.classList.add('show');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
     </script>
 </body>
